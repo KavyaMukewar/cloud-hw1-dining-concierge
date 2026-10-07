@@ -29,7 +29,7 @@ Yelp API -> DynamoDB (yelp-restaurants) + OpenSearch (restaurants index)
 | 2 | API Gateway + LF0 (boilerplate reply) | Done |
 | 3 | Lex bot, LF1, SQS | Pending |
 | 4 | LF0 calls Lex | Pending |
-| 5 | Yelp scrape to DynamoDB | Pending |
+| 5 | Yelp scrape to DynamoDB | Done |
 | 6 | OpenSearch index | Pending |
 | 7 | LF2 queue worker + SES | Pending |
 
@@ -48,6 +48,12 @@ Yelp API -> DynamoDB (yelp-restaurants) + OpenSearch (restaurants index)
 4. Enabled CORS on `/chatbot` (adds `OPTIONS`).
 5. Deployed to a stage named `dev`.
 6. Pointed `frontend/assets/js/sdk/apigClient.js` (`invokeUrl`) at the deployed stage, then re-uploaded that file to S3.
+
+### Part 5: Yelp scrape to DynamoDB
+1. Created DynamoDB table `yelp-restaurants` (partition key `BusinessID`, on-demand capacity).
+2. Created a Yelp app and API key (Base plan). The key is read from the `YELP_API_KEY` environment variable, never stored in the repo.
+3. Ran `other-scripts/scrape_yelp.py` in AWS CloudShell. It searched Manhattan for 7 cuisines (chinese, italian, japanese, mexican, indian, thai, korean), skipped duplicate business IDs, and stored 1,325 unique restaurants with BusinessID, Name, Address, Coordinates, NumberOfReviews, Rating, ZipCode, Cuisine and insertedAtTimestamp.
+4. The script also wrote `restaurants.json` (RestaurantID + Cuisine) for loading into OpenSearch.
 
 ## Secrets
 
