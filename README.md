@@ -1,5 +1,5 @@
 ### Dining Concierge Chatbot - HW1
-krm9909, as21114
+Kavya Mukewar krm9909, Ananya Singh as21114
 
 A serverless chatbot that collects dining preferences and emails restaurant suggestions.
 
