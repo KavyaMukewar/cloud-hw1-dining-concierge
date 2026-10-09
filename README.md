@@ -57,4 +57,4 @@ Yelp API -> DynamoDB (yelp-restaurants) + OpenSearch (restaurants index)
 
 ## Secrets
 
-No keys or credentials are stored in this repo. The Yelp API key is read from an environment variable by the scrape script.
+No keys or credentials are stored in this repo. The scrape script reads the Yelp API key from an environment variable.
