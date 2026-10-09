@@ -3,11 +3,14 @@ import os
 import re
 
 import boto3
+from botocore.exceptions import ClientError
 
 sqs = boto3.client("sqs")
+dynamodb = boto3.resource("dynamodb")
 
 VALID_LOCATIONS = {"manhattan", "new york", "new york city", "nyc", "manhattan ny", "manhattan, ny"}
 VALID_CUISINES = {"chinese", "italian", "japanese", "mexican", "indian", "thai", "korean"}
+YES_WORDS = {"yes", "y", "yeah", "yep", "sure", "ok", "okay", "yup"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -45,7 +48,33 @@ def elicit(intent, slot, text):
     }
 
 
-def validate(intent):
+def normalize_location(value):
+    return "manhattan" if value.strip().lower() in VALID_LOCATIONS else value.strip().lower()
+
+
+def get_last_search(user_id):
+    try:
+        table = dynamodb.Table(os.environ.get("STATE_TABLE", "concierge-state"))
+        return table.get_item(Key={"UserID": user_id}).get("Item")
+    except ClientError as err:
+        print(f"State lookup failed: {err.response['Error']['Code']}")
+        return None
+
+
+def same_search(last, location, cuisine):
+    return bool(
+        last
+        and last.get("location")
+        and normalize_location(last["location"]) == normalize_location(location)
+        and (last.get("cuisine") or "").lower() == cuisine.strip().lower()
+    )
+
+
+def enqueue(request):
+    sqs.send_message(QueueUrl=os.environ["QUEUE_URL"], MessageBody=json.dumps(request))
+
+
+def validate(intent, user_id):
     slots = intent["slots"]
 
     location = slot_value(slots, "Location")
@@ -55,6 +84,29 @@ def validate(intent):
     cuisine = slot_value(slots, "Cuisine")
     if cuisine and cuisine.strip().lower() not in VALID_CUISINES:
         return elicit(intent, "Cuisine", "Sorry, I only know Chinese, Italian, Japanese, Mexican, Indian, Thai and Korean. Which one would you like?")
+
+    if location and cuisine:
+        answer = slot_value(slots, "UseLastSearch")
+        last = get_last_search(user_id)
+        if same_search(last, location, cuisine):
+            if answer is None:
+                return elicit(
+                    intent,
+                    "UseLastSearch",
+                    f"Welcome back! Last time you searched for {last['cuisine']} restaurants in {last['location']}. "
+                    "Would you like the same recommendations as last time? (yes or no)",
+                )
+            if answer.strip().lower() in YES_WORDS:
+                enqueue({
+                    "location": last["location"],
+                    "cuisine": last["cuisine"],
+                    "dining_time": last.get("dining_time"),
+                    "people": last.get("people"),
+                    "email": last["email"],
+                    "user_id": user_id,
+                    "restaurant_ids": last.get("restaurant_ids") or [],
+                })
+                return close(intent, "Great, I'll send you the same recommendations as last time. Have a good day!")
 
     people = slot_value(slots, "NumberOfPeople")
     if people is not None:
@@ -74,18 +126,19 @@ def validate(intent):
 
 def handle_dining(event):
     intent = event["sessionState"]["intent"]
+    user_id = event.get("sessionId", "")
     if event["invocationSource"] == "DialogCodeHook":
-        return validate(intent)
+        return validate(intent, user_id)
 
     slots = intent["slots"]
-    request = {
+    enqueue({
         "location": slot_value(slots, "Location"),
         "cuisine": slot_value(slots, "Cuisine"),
         "dining_time": slot_value(slots, "DiningTime"),
         "people": slot_value(slots, "NumberOfPeople"),
         "email": slot_value(slots, "Email"),
-    }
-    sqs.send_message(QueueUrl=os.environ["QUEUE_URL"], MessageBody=json.dumps(request))
+        "user_id": user_id,
+    })
     return close(intent, "You're all set. Expect my suggestions shortly! Have a good day.")
 
 

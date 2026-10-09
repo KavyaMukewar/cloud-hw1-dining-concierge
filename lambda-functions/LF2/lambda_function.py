@@ -10,6 +10,7 @@ from botocore.exceptions import ClientError
 sqs = boto3.client("sqs")
 ses = boto3.client("ses")
 dynamodb = boto3.client("dynamodb")
+state_db = boto3.resource("dynamodb")
 
 MAX_MESSAGES = 10
 SUGGESTION_COUNT = 3
@@ -80,15 +81,34 @@ def send_email(sender, recipient, body):
     )
 
 
+def save_state(request, restaurants):
+    if not request.get("user_id") or not restaurants:
+        return
+    try:
+        table = state_db.Table(os.environ.get("STATE_TABLE", "concierge-state"))
+        table.put_item(Item={
+            "UserID": request["user_id"],
+            "location": request.get("location"),
+            "cuisine": request.get("cuisine"),
+            "dining_time": request.get("dining_time"),
+            "people": request.get("people"),
+            "email": request["email"],
+            "restaurant_ids": [item["BusinessID"]["S"] for item in restaurants],
+        })
+    except ClientError as err:
+        print(f"Could not save state: {err.response['Error']['Code']}")
+
+
 def handle_message(message):
     request = json.loads(message["Body"])
-    ids = pick_restaurant_ids(request["cuisine"])
+    ids = request.get("restaurant_ids") or pick_restaurant_ids(request["cuisine"])
     restaurants = fetch_details(ids)
     if restaurants:
         body = build_email(request, restaurants)
     else:
         body = f"Sorry, I couldn't find any {request['cuisine']} restaurants right now. Please try another cuisine."
     send_email(os.environ["SENDER_EMAIL"], request["email"], body)
+    save_state(request, restaurants)
 
 
 def lambda_handler(event, context):

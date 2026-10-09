@@ -19,17 +19,19 @@ def respond(status, body):
     return {"statusCode": status, "headers": HEADERS, "body": json.dumps(body)}
 
 
-def session_id_for(event):
+def session_id_for(event, client_id=None):
     identity = (event.get("requestContext") or {}).get("identity") or {}
-    seed = f"{identity.get('sourceIp', '')}|{identity.get('userAgent', '')}"
+    seed = client_id or f"{identity.get('sourceIp', '')}|{identity.get('userAgent', '')}"
     return hashlib.sha256(seed.encode()).hexdigest()[:32]
 
 
 def lambda_handler(event, context):
     try:
         body = json.loads(event.get("body") or "{}")
-        text = body["messages"][0]["unstructured"]["text"]
-    except (KeyError, IndexError, TypeError, ValueError):
+        unstructured = body["messages"][0]["unstructured"]
+        text = unstructured["text"]
+        client_id = unstructured.get("id")
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
         return respond(400, {"code": 400, "message": "Expected messages[0].unstructured.text"})
 
     try:
@@ -37,7 +39,7 @@ def lambda_handler(event, context):
             botId=os.environ["BOT_ID"],
             botAliasId=os.environ["BOT_ALIAS_ID"],
             localeId=os.environ.get("LOCALE_ID", "en_US"),
-            sessionId=session_id_for(event),
+            sessionId=session_id_for(event, client_id),
             text=text,
         )
     except ClientError as err:

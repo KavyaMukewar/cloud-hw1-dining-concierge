@@ -25,12 +25,24 @@ $(document).ready(function() {
     }
   }
 
+  var userId = null;
+  try {
+    userId = localStorage.getItem('conciergeUserId');
+    if (!userId) {
+      userId = 'u' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('conciergeUserId', userId);
+    }
+  } catch (e) {
+    userId = 'u' + Math.random().toString(36).slice(2);
+  }
+
   function callChatbotApi(message) {
     // params, body, additionalParams
     return sdk.chatbotPost({}, {
       messages: [{
         type: 'unstructured',
         unstructured: {
+          id: userId,
           text: message
         }
       }]
