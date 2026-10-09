@@ -1,6 +1,5 @@
-### Dining Concierge Chatbot
+### Dining Concierge Chatbot - HW1
 krm9909, as21114
-Cloud Computing and Big Data, Fall 2026, Assignment 1. Team: Kavya Mukewar and [TEAMMATE FULL NAME].
 
 A serverless chatbot that collects dining preferences and emails restaurant suggestions.
 
